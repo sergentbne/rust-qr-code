@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+gif = "0.13.1"
 image = "0.25.5"
 luma = "0.1.0"
 qrcode = "0.14.1"
+xz = "0.1.0"
