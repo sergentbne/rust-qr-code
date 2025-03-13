@@ -18,6 +18,7 @@ fn create_qr_code_from_data(data: [u8; 2048], qr_number: u16) {
     let image = code.render::<Luma<u8>>().build();
     file_string = file_string.replace("{}", &qr_number_string);
     image.save(file_string).unwrap();
+    return;
 }
 
 fn create_gif() {
@@ -53,6 +54,7 @@ fn compress_file(path_to_file: &str) -> Result<VecDeque<u8>, String> {
         Ok(n) => n,
         Err(err) => return Err(format!("Error reading file: {}", err)),
     };
+
     stuff.read_to_end(&mut data).unwrap();
     let mut compressed = VecDeque::new();
     let mut encoder = XzEncoder::new(&mut compressed, 9);
@@ -64,6 +66,11 @@ fn compress_file(path_to_file: &str) -> Result<VecDeque<u8>, String> {
         Ok(_) => (),
         Err(err) => return Err(format!("Error finishing compression: {}", err)),
     };
+    println!(
+        "size before compression: {:}",
+        stuff.metadata().unwrap().len()
+    );
+    println!("size after compression: {:}", compressed.len());
     Ok(compressed)
 }
 
@@ -102,7 +109,7 @@ fn get_data_from_file(mut data: VecDeque<u8>) {
         qrcode_counter += 1;
         create_qr_code_from_data(buffer, qrcode_counter);
     }
-    println!("\rfinished reading the file                                      ");
+    println!("finished reading the file                                      ");
 }
 
 fn main() {
