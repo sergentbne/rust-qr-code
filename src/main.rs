@@ -1,11 +1,10 @@
-use image::{Luma, buffer};
+use image::Luma;
 use qrcode::QrCode;
 // use std::fmt::Error;
 use gif::Encoder;
 use std::collections::VecDeque;
-use std::fmt::Formatter;
-use std::fs::{self, File, create_dir, read_dir, remove_dir_all};
-use std::io::{self, Error, Read, Write};
+use std::fs::{File, create_dir, read_dir, remove_dir_all};
+use std::io::{Read, Write};
 use xz::write::XzEncoder;
 
 fn create_qr_code_from_data(data: [u8; 2048], qr_number: u16) {
