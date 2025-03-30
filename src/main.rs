@@ -1,49 +1,30 @@
-use image::Luma;
+extern crate ffmpeg_next as ffmpeg;
+use image::{GenericImageView, Luma};
 use qrcode::QrCode;
 // use std::fmt::Error;
 use gif::Encoder;
+use rust_qr_code::convert_to_av1::convert_func;
+
 use std::collections::VecDeque;
 use std::fs::{File, create_dir, read_dir, remove_dir_all};
 use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use xz::write::XzEncoder;
 
-fn create_qr_code_from_data(data: [u8; 2048], qr_number: u16) {
-    let data_byte_string_litteral: &[u8] = &data;
-    let code: QrCode = QrCode::new(data_byte_string_litteral).unwrap();
+use std::collections::HashMap;
+use std::env;
+use std::time::Instant;
 
-    let mut file_string: String = String::from("/tmp/qrcode_files/qrcode{}.png");
-    let qr_number_string = qr_number.to_string();
-    // Render the bits into an image.
-    let image = code.render::<Luma<u8>>().build();
-    file_string = file_string.replace("{}", &qr_number_string);
-    image.save(file_string).unwrap();
-    return;
+fn is_image_file(entry: &PathBuf) -> bool {
+    if let Some(ext) = entry.extension().and_then(|s| s.to_str()) {
+        let ext = ext.to_lowercase();
+        return ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp";
+    }
+    false
 }
 
-fn create_gif() {
-    let img = image::open("/Users/louis/Library/CloudStorage/OneDrive-CollègedeMaisonneuve/informatique/travail_personnel/rust-qr-code/qrcode0.png").unwrap().to_rgb8();
-
-    let color_map = &[0xFF, 0xFF, 0xFF, 0, 0, 0];
-    let mut encoder = Encoder::new(
-        File::create("output.gif").unwrap(),
-        img.width() as u16,
-        img.height() as u16,
-        color_map,
-    )
-    .unwrap();
-    match encoder.set_repeat(gif::Repeat::Infinite) {
-        Ok(_) => println!("encoder done"),
-        Err(err) => panic!("this is not supposed to be this way: {}", err),
-    };
-    for i in read_dir("/tmp/qrcode_files").unwrap() {
-        // dbg!(&i);
-        let mut img = image::open(i.expect("REASON").path()).unwrap().to_rgb8();
-        let frame = gif::Frame::from_rgb(img.width() as u16, img.height() as u16, &mut img);
-        encoder.write_frame(&frame).unwrap();
-    }
-
-    // encoder.set_delay(100); // 100ms delay between frames
-    // add more frames if needed
+fn create_mp4() {
+    convert_func();
 }
 
 fn compress_file(path_to_file: &str) -> Result<VecDeque<u8>, String> {
@@ -78,7 +59,10 @@ fn create_environement() -> () {
         Ok(_) => {
             println!("Written directory in tmp for files")
         }
-        Err(err) => panic!("Failed to write directory: {}", err),
+        Err(err) => {
+            clean_environnement();
+            create_environement();
+        }
     };
 }
 
@@ -92,6 +76,18 @@ fn clean_environnement() {
             err
         ),
     };
+}
+fn create_qr_code_from_data(data: [u8; 2048], qr_number: u16) {
+    let data_byte_string_litteral: &[u8] = &data;
+    let code: QrCode = QrCode::new(data_byte_string_litteral).unwrap();
+
+    let mut file_string: String = String::from("/tmp/qrcode_files/qrcode{}.png");
+    let qr_number_string: String = qr_number.to_string();
+    // Render the bits into an image.
+    let image: image::ImageBuffer<Luma<u8>, Vec<u8>> = code.render::<Luma<u8>>().build();
+    file_string = file_string.replace("{}", &qr_number_string);
+    image.save(file_string).unwrap();
+    return;
 }
 
 fn get_data_from_file(mut data: VecDeque<u8>) {
@@ -120,6 +116,6 @@ fn main() {
         Ok(n) => get_data_from_file(n),
         Err(err) => panic!("something went wrong here, {}", err),
     };
-    create_gif();
+    create_mp4();
     clean_environnement();
 }
