@@ -1,0 +1,16 @@
+{
+    "configurations": [
+    {
+        "name": "(lldb) Launch",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/rust-qr-code",
+        "args": ["/Users/louis/prog/rust-qr-code/qrcode0.png"],
+        "stopAtEntry": true,
+        "cwd": "${fileDirname}",
+        "environment": [],
+        "externalConsole": false,
+        "MIMode": "lldb"
+    }
+    ]
+}
