@@ -86,14 +86,14 @@ impl Transcoder {
         opened_encoder.set_frame_rate(Some(Rational::new(30, 1)));
         ost.set_parameters(&opened_encoder);
         ost.set_time_base(Rational::new(1, 15360));
-        // ost.set_avg_frame_rate(Rational::new(30, 1));
+        ost.set_avg_frame_rate(Rational::new(30, 1));
         // ost.set_rate(Rational::new(30, 1));
         println!(
             "Output stream (from ost) time base in transcoder constructor: {:?}",
             ost.time_base()
         );
 
-        assert_eq!(ost.time_base(), opened_encoder.time_base());
+        assert_eq!(ost.avg_frame_rate(), opened_encoder.frame_rate());
         assert_eq!(
             octx.stream(0).unwrap().time_base(),
             opened_encoder.time_base()
@@ -295,10 +295,16 @@ pub fn convert_func() {
     //     }
     // };
     println!(
-        "Stream time base: {:?}",
+        "Stream frame rate: {:?}",
         octx.stream(0).unwrap().avg_frame_rate()
     );
-    println!("Encoder time base: {:?}", Rational::new(1, 30));
+
+    assert_eq!(
+        octx.stream(0).unwrap().avg_frame_rate(),
+        transcoder.encoder.frame_rate()
+    );
+
+    println!("Encoder frame rate: {:?}", transcoder.encoder.frame_rate());
     // Process frames
     // transcoder.receive_and_process_decoded_frames();
     transcoder.send_eof_to_encoder();
@@ -308,10 +314,10 @@ pub fn convert_func() {
         match transcoder.encoder.receive_packet(&mut packet) {
             Ok(()) => {
                 packet.set_stream(0);
-                packet.rescale_ts(
-                    Rational::new(1, 15360), // Input timebase (should match encoder setting)
-                    octx.stream(0).unwrap().time_base(), // Output timebase
-                );
+                // packet.rescale_ts(
+                //     Rational::new(1, 15360), // Input timebase (should match encoder setting)
+                //     octx.stream(0).unwrap().time_base(), // Output timebase
+                // );
                 match packet.write_interleaved(&mut octx) {
                     Ok(_) => println!("Packet written successfully."),
                     Err(e) => eprintln!("Error writing packet: {}", e),
@@ -335,7 +341,10 @@ pub fn convert_func() {
             }
         }
     }
-
+    assert_eq!(
+        octx.stream(0).unwrap().avg_frame_rate(),
+        transcoder.encoder.frame_rate()
+    );
     //     transcoder.send_eof_to_encoder();
     // println!("done that");
     // Now write trailer
