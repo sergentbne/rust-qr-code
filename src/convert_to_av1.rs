@@ -86,8 +86,8 @@ impl Transcoder {
         opened_encoder.set_frame_rate(Some(Rational::new(30, 1)));
         ost.set_parameters(&opened_encoder);
         ost.set_time_base(Rational::new(1, 15360));
-        ost.set_avg_frame_rate(Rational::new(30, 1));
-        ost.set_rate(Rational::new(30, 1));
+        // ost.set_avg_frame_rate(Rational::new(30, 1));
+        // ost.set_rate(Rational::new(30, 1));
         println!(
             "Output stream (from ost) time base in transcoder constructor: {:?}",
             ost.time_base()
