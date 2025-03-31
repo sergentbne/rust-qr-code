@@ -105,6 +105,7 @@ fn get_data_from_file(mut data: VecDeque<u8>) {
         create_qr_code_from_data(buffer, qrcode_counter);
     }
     println!("finished reading the file                                      ");
+    println!("created {} image(s)", qrcode_counter);
 }
 
 fn main() {

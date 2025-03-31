@@ -28,7 +28,8 @@ use glob::glob;
 use image::RgbImage;
 use qrcode::render::string;
 
-const DEFAULT_X264_OPTS: &str = "preset=medium";
+// const DEFAULT_X264_OPTS: &str = "preset=medium";
+const DEFAULT_X264_OPTS: &str = "";
 
 struct Transcoder {
     ost_index: usize,
@@ -63,7 +64,7 @@ impl Transcoder {
         x264_opts: Dictionary,
         enable_logging: bool,
     ) -> Result<Self, ffmpeg::Error> {
-        let global_header = octx.format().flags().contains(format::Flags::GLOBAL_HEADER);
+        // let global_header = octx.format().flags().contains(format::Flags::GLOBAL_HEADER);
 
         let codec = encoder::find(codec::Id::H264);
         let mut ost = octx.add_stream(codec)?;
@@ -73,26 +74,48 @@ impl Transcoder {
                 .encoder()
                 .video()?;
 
-        ost.set_parameters(&encoder);
         encoder.set_height(height);
         encoder.set_width(width);
         encoder.set_format(format::Pixel::YUV420P);
-        encoder.set_time_base(Rational::new(1, 30));
+        encoder.set_time_base(Rational::new(1, 15360));
         encoder.set_frame_rate(Some(Rational::new(30, 1))); // 30 FPS
-        if global_header {
-            encoder.set_flags(codec::Flags::GLOBAL_HEADER);
-        }
 
-        let opened_encoder = encoder
+        let mut opened_encoder = encoder
             .open_with(x264_opts)
             .expect("error opening x264 with supplied settings");
+        opened_encoder.set_frame_rate(Some(Rational::new(30, 1)));
         ost.set_parameters(&opened_encoder);
+        ost.set_time_base(Rational::new(1, 15360));
+        ost.set_avg_frame_rate(Rational::new(30, 1));
+        ost.set_rate(Rational::new(30, 1));
+        println!(
+            "Output stream (from ost) time base in transcoder constructor: {:?}",
+            ost.time_base()
+        );
 
+        assert_eq!(ost.time_base(), opened_encoder.time_base());
+        assert_eq!(
+            octx.stream(0).unwrap().time_base(),
+            opened_encoder.time_base()
+        );
         match octx.write_header() {
             Ok(_) => println!("Header written successfully."),
             Err(e) => eprintln!("Failed to write header: {}", e),
         }
+        println!(
+            "Output stream (from octx) time base in transcoder constructor: {:?}",
+            octx.stream(0).unwrap().time_base()
+        );
+        println!(
+            "Output stream (from octx) time base in transcoder constructor: {:?}",
+            &octx.stream(0).unwrap().time_base()
+        );
+        println!(
+            "Encoder frame rate in transcoder constructor {:?}",
+            opened_encoder.frame_rate()
+        );
 
+        println!("All output context streams {:?}", &octx.streams().count());
         let images: Vec<PathBuf> = glob(pattern)
             .expect("Failed to read glob pattern")
             .filter_map(Result::ok)
@@ -273,7 +296,7 @@ pub fn convert_func() {
     // };
     println!(
         "Stream time base: {:?}",
-        octx.stream(0).unwrap().time_base()
+        octx.stream(0).unwrap().avg_frame_rate()
     );
     println!("Encoder time base: {:?}", Rational::new(1, 30));
     // Process frames
@@ -286,7 +309,7 @@ pub fn convert_func() {
             Ok(()) => {
                 packet.set_stream(0);
                 packet.rescale_ts(
-                    Rational::new(1, 30), // Input timebase (should match encoder setting)
+                    Rational::new(1, 15360), // Input timebase (should match encoder setting)
                     octx.stream(0).unwrap().time_base(), // Output timebase
                 );
                 match packet.write_interleaved(&mut octx) {
