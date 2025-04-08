@@ -3,7 +3,7 @@
 # File To QRCODE Video.
 
 This program is *supposed* to be quite easy to use!
-**WARNING, This program is quite greedy in file size, so donc forget to do **
+**WARNING, This program is quite greedy in file size, so donc forget to do**
 > cargo clean
 **from time to time.**
 ```bash
