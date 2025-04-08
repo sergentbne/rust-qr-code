@@ -4,7 +4,7 @@
 
 This program is *supposed* to be quite easy to use!
 **WARNING, This program is quite greedy in file size, so donc forget to do **
-> cargo clean 
+> cargo clean
 **from time to time.**
 ```bash
 cargo run --release {name of file}
