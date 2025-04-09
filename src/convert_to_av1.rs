@@ -1,29 +1,18 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use std::env;
-use std::time::Instant;
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 
-use ffmpeg::{
-    Dictionary, Packet, Rational, codec, decoder, encoder, format, frame, log, media, picture,
-};
-use ffmpeg_next::ffi::av_hwdevice_iterate_types;
+use ffmpeg::{Dictionary, Packet, Rational, codec, encoder, format, frame, log};
 use glob::glob;
+use image::EncodableLayout;
 use image::imageops::FilterType;
-use image::{EncodableLayout, GenericImage, RgbImage};
-use qrcode::render::string;
 
 // const DEFAULT_X264_OPTS: &str = "preset=medium";
-const DEFAULT_X264_OPTS: &str = "fps=30";
+const DEFAULT_X264_OPTS: &str = "";
 
 struct Transcoder {
-    ost_index: usize,
     encoder: encoder::Video,
-    logging_enabled: bool,
     frame_count: usize,
-    last_log_frame_count: usize,
-    starting_time: Instant,
-    last_log_time: Instant,
     images: Vec<PathBuf>,
     scaler: ffmpeg::software::scaling::Context,
 }
@@ -46,9 +35,7 @@ impl Transcoder {
         height: u32,
         pattern: &str,
         octx: &mut format::context::Output,
-        ost_index: usize,
         x264_opts: Dictionary,
-        enable_logging: bool,
     ) -> Result<Self, ffmpeg::Error> {
         // let global_header = octx.format().flags().contains(format::Flags::GLOBAL_HEADER);
 
@@ -74,7 +61,7 @@ impl Transcoder {
             .open_with(x264_opts)
             .expect("error opening x264 with supplied settings");
         opened_encoder.set_frame_rate(Some(Rational::new(30, 1)));
-        let mut scaler = ffmpeg::software::scaling::Context::get(
+        let scaler = ffmpeg::software::scaling::Context::get(
             ffmpeg::format::Pixel::RGB24,
             width,
             height,
@@ -124,13 +111,8 @@ impl Transcoder {
             .collect();
 
         Ok(Self {
-            ost_index,
             encoder: opened_encoder,
-            logging_enabled: enable_logging,
             frame_count: 0,
-            last_log_frame_count: 0,
-            starting_time: Instant::now(),
-            last_log_time: Instant::now(),
             images: images,
             scaler: scaler,
         })
@@ -148,7 +130,7 @@ impl Transcoder {
 
         // Get frame parameters
         let frame_format = frame.format();
-        let frame_width = frame.width() as usize;
+        // let frame_width = frame.width() as usize;
         let frame_height = frame.height() as usize;
         let frame_linesizes = frame.stride(0);
 
@@ -237,22 +219,22 @@ impl Transcoder {
         self.encoder.send_eof().unwrap();
     }
 
-    fn log_progress(&mut self, timestamp: f64) {
-        if !self.logging_enabled
-            || (self.frame_count - self.last_log_frame_count < 100
-                && self.last_log_time.elapsed().as_secs_f64() < 1.0)
-        {
-            return;
-        }
-        eprintln!(
-            "time elpased: \t{:8.2}\tframe count: {:8}\ttimestamp: {:8.2}",
-            self.starting_time.elapsed().as_secs_f64(),
-            self.frame_count,
-            timestamp
-        );
-        self.last_log_frame_count = self.frame_count;
-        self.last_log_time = Instant::now();
-    }
+    // fn log_progress(&mut self, timestamp: f64) {
+    //     if !self.logging_enabled
+    //         || (self.frame_count - self.last_log_frame_count < 100
+    //             && self.last_log_time.elapsed().as_secs_f64() < 1.0)
+    //     {
+    //         return;
+    //     }
+    //     eprintln!(
+    //         "time elpased: \t{:8.2}\tframe count: {:8}\ttimestamp: {:8.2}",
+    //         self.starting_time.elapsed().as_secs_f64(),
+    //         self.frame_count,
+    //         timestamp
+    //     );
+    //     self.last_log_frame_count = self.frame_count;
+    //     self.last_log_time = Instant::now();
+    // }
 }
 
 // fn create_yuv_image(rgb_img: &RgbImage) -> (Vec<u8>, (u32, u32)) {
@@ -307,8 +289,6 @@ pub fn convert_func() {
 
     let mut octx = format::output(&output_file).unwrap();
 
-    let mut ost_index: usize = 0;
-
     // Set up for stream copy for non-video stream.
 
     // We need to set codec_tag to 0 lest we run into incompatible codec tag
@@ -324,9 +304,7 @@ pub fn convert_func() {
         img_temp.height(),
         &pattern,
         &mut octx,
-        ost_index,
         x264_opts,
-        false,
     )
     .unwrap();
     println!(
