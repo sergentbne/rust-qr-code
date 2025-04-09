@@ -1,27 +1,13 @@
 extern crate ffmpeg_next as ffmpeg;
-use image::{GenericImageView, Luma};
+use image::Luma;
 use qrcode::QrCode;
 // use std::fmt::Error;
-use gif::Encoder;
 use rust_qr_code::convert_to_av1::convert_func;
 
 use std::collections::VecDeque;
-use std::fs::{File, create_dir, read_dir, remove_dir_all};
+use std::fs::{File, create_dir, remove_dir_all};
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
 use xz::write::XzEncoder;
-
-use std::collections::HashMap;
-use std::env;
-use std::time::Instant;
-
-fn is_image_file(entry: &PathBuf) -> bool {
-    if let Some(ext) = entry.extension().and_then(|s| s.to_str()) {
-        let ext = ext.to_lowercase();
-        return ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp";
-    }
-    false
-}
 
 fn create_mp4() {
     convert_func();
@@ -59,7 +45,7 @@ fn create_environement() -> () {
         Ok(_) => {
             println!("Written directory in tmp for files")
         }
-        Err(err) => {
+        Err(_err) => {
             clean_environnement();
             create_environement();
         }
