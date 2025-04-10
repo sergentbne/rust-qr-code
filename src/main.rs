@@ -1,8 +1,10 @@
-extern crate ffmpeg_next as ffmpeg;
+// extern crate ffmpeg_next as ffmpeg;
+mod convert_to_mp4;
+
+use convert_to_mp4::convert_func;
+
 use image::Luma;
 use qrcode::QrCode;
-// use std::fmt::Error;
-use rust_qr_code::convert_to_av1::convert_func;
 
 use std::collections::VecDeque;
 use std::fs::{File, create_dir, remove_dir_all};
