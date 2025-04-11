@@ -3,12 +3,18 @@ mod convert_to_mp4;
 
 use convert_to_mp4::convert_func;
 
+use ffmpeg_next::device::input;
+use ffmpeg_next::option;
+use ffmpeg_next::software::scaling::support::output;
 use image::Luma;
 use qrcode::QrCode;
+use qrcode::render::string;
 
 use std::collections::VecDeque;
 use std::fs::{File, create_dir, remove_dir_all};
 use std::io::{Read, Write};
+use std::result;
+use std::str::FromStr;
 use xz::write::XzEncoder;
 
 fn create_mp4() {
@@ -96,14 +102,56 @@ fn get_data_from_file(mut data: VecDeque<u8>) {
     println!("created {} image(s)", qrcode_counter);
 }
 
+fn parse_args<'a>(
+    args: &'a Vec<String>,
+    default_framerate: &'a String,
+    default_video_output: &'a String,
+) -> Result<[Option<&'a std::string::String>; 3], String> {
+    let mut inputf: Option<&String> = None; //input file
+    let mut outputf: Option<&String> = None; //output file
+    let mut framerate: Option<&String> = Some(&default_framerate);
+
+    for (index, value) in args.iter().enumerate() {
+        match value.as_str() {
+            "-i" | "--input" => inputf = Some(&args[index + 1]),
+            "-o" | "--output" => outputf = Some(&args[index + 1]),
+            "-f" | "--framerate" => framerate = Some(&args[index + 1]),
+
+            &_ => {
+                print!("")
+            }
+        }
+    }
+    if inputf.is_none() && outputf.is_none() && Some(&args[1]).is_some() {
+        inputf = Some(&args[1]);
+        outputf = Some(default_video_output);
+    }
+    if !inputf.is_some() {
+        return Err(String::from_str("Input was not defined").unwrap());
+    }
+    if !outputf.is_some() {
+        return Err(String::from_str("Output was not defined").unwrap());
+    }
+    return Ok([inputf, outputf, framerate]);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    let default_framerate: String = String::from_str("30").unwrap();
+    let default_output_file: String = String::from_str("output.mp4").unwrap();
+    let parsed_arguments = parse_args(&args, &default_framerate, &default_output_file);
+    let parsed_arg_bullshit = parsed_arguments
+        .expect("parsed arguments should not be empty, pass some arguments")[0]
+        .expect("...how did you get here?");
     create_environement();
     // println!("{}", args[1]);
 
-    match compress_file(&args[1]) {
-        Ok(n) => get_data_from_file(n),
-        Err(err) => panic!("something went wrong here, {}", err),
+    match compress_file(parsed_arg_bullshit) {
+        Ok(n) => {
+            println!("{}", parsed_arg_bullshit);
+            get_data_from_file(n)
+        }
+        Err(err) => panic!("compression error!, {}", err),
     };
     create_mp4();
     clean_environnement();
