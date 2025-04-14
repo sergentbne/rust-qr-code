@@ -2,3 +2,5 @@
 output.*
 .DS_Store
 fakefile_201MB.txt
+qr.png
+tmp/qr.xz

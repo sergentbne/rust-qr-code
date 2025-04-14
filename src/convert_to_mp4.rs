@@ -13,6 +13,7 @@ const DEFAULT_X264_OPTS: &str = "";
 struct Transcoder {
     encoder: encoder::Video,
     frame_count: usize,
+    framerate: u8,
     images: Vec<PathBuf>,
     scaler: ffmpeg::software::scaling::Context,
 }
@@ -34,11 +35,10 @@ impl Transcoder {
         width: u32,
         height: u32,
         pattern: &str,
+        framerate: u8,
         octx: &mut format::context::Output,
         x264_opts: Dictionary,
     ) -> Result<Self, ffmpeg::Error> {
-        // let global_header = octx.format().flags().contains(format::Flags::GLOBAL_HEADER);
-
         let codec = encoder::find(codec::Id::H264);
         let mut ost = octx.add_stream(codec)?;
 
@@ -51,7 +51,7 @@ impl Transcoder {
         encoder.set_width(width);
         encoder.set_format(format::Pixel::YUV420P);
         encoder.set_time_base(Rational::new(1, 15360));
-        encoder.set_frame_rate(Some(Rational::new(30, 1))); // 30 FPS
+        encoder.set_frame_rate(Some(Rational::new(framerate as i32, 1))); // 30 FPS
         encoder.set_bit_rate(8_000_000);
         encoder.set_max_bit_rate(10_000_000);
         encoder.set_gop(12);
@@ -60,7 +60,7 @@ impl Transcoder {
         let mut opened_encoder = encoder
             .open_with(x264_opts)
             .expect("error opening x264 with supplied settings");
-        opened_encoder.set_frame_rate(Some(Rational::new(30, 1)));
+        opened_encoder.set_frame_rate(Some(Rational::new(framerate as i32, 1)));
         let scaler = ffmpeg::software::scaling::Context::get(
             ffmpeg::format::Pixel::RGB24,
             width,
@@ -74,7 +74,7 @@ impl Transcoder {
 
         ost.set_parameters(&opened_encoder);
         ost.set_time_base(Rational::new(1, 15360));
-        ost.set_avg_frame_rate(Rational::new(30, 1));
+        ost.set_avg_frame_rate(Rational::new(framerate as i32, 1));
 
         // ost.set_rate(Rational::new(30, 1));
         println!(
@@ -113,6 +113,7 @@ impl Transcoder {
         Ok(Self {
             encoder: opened_encoder,
             frame_count: 0,
+            framerate: framerate,
             images: images,
             scaler: scaler,
         })
@@ -168,18 +169,10 @@ impl Transcoder {
         };
         let mut rgb_frame: frame::Video = frame::Video::new(format::Pixel::RGB24, width, height);
 
-        // unsafe {
-        //     rgb_frame.alloc(ffmpeg::format::Pixel::RGB24, width, height);
-        // }
-        // unsafe {
-        //     yuv_frame.alloc(ffmpeg::format::Pixel::YUV420P, width, height);
-        // }
         for image_frame in self.images.clone() {
             let mut yuv_frame: frame::Video =
                 frame::Video::new(format::Pixel::YUV420P, width, height);
 
-            // let img =
-            //     image::open(image_frame).unwrap().to_rgb8();
             let img = image::ImageReader::open(image_frame)
                 .unwrap()
                 .decode()
@@ -190,24 +183,14 @@ impl Transcoder {
 
             Transcoder::copy_image_to_frame(&mut rgb_frame, &img, width as usize, height as usize)
                 .unwrap();
-            // let img_data = img.as_bytes();
-            // let frame_data = rgb_frame.data_mut(0);
-            // for (i, pixel) in img.pixels().enumerate() {
-            //     let offset = i * 3;
-            //     frame_data[offset] = pixel[0]; // R
-            //     frame_data[offset + 1] = pixel[1]; // G
-            //     frame_data[offset + 2] = pixel[2]; // B
-            // }
-            // for i in (0..width) {
-            //     for y in (0..height) {}
-            // }
+
             self.scaler.run(&rgb_frame, &mut yuv_frame).unwrap();
 
             // Properly set frame data for YUV420P
 
             yuv_frame.set_pts(Some(self.frame_count as i64));
             self.send_frame_to_encoder(&yuv_frame);
-            self.frame_count += 1 * 512;
+            self.frame_count += 1 * (15360 / self.framerate as usize);
         }
     }
 
@@ -218,68 +201,13 @@ impl Transcoder {
     fn send_eof_to_encoder(&mut self) {
         self.encoder.send_eof().unwrap();
     }
-
-    // fn log_progress(&mut self, timestamp: f64) {
-    //     if !self.logging_enabled
-    //         || (self.frame_count - self.last_log_frame_count < 100
-    //             && self.last_log_time.elapsed().as_secs_f64() < 1.0)
-    //     {
-    //         return;
-    //     }
-    //     eprintln!(
-    //         "time elpased: \t{:8.2}\tframe count: {:8}\ttimestamp: {:8.2}",
-    //         self.starting_time.elapsed().as_secs_f64(),
-    //         self.frame_count,
-    //         timestamp
-    //     );
-    //     self.last_log_frame_count = self.frame_count;
-    //     self.last_log_time = Instant::now();
-    // }
 }
 
-// fn create_yuv_image(rgb_img: &RgbImage) -> (Vec<u8>, (u32, u32)) {
-//     let width = rgb_img.width();
-//     let height = rgb_img.height();
-//     let mut y_plane = Vec::with_capacity((width * height) as usize);
-//     let mut u_plane = Vec::with_capacity((width * height / 4) as usize);
-//     let mut v_plane = Vec::with_capacity((width * height / 4) as usize);
-
-//     // Simple RGB to YUV420 conversion (with subsampling)
-//     for y in 0..height {
-//         for x in 0..width {
-//             let pixel = rgb_img.get_pixel(x, y);
-//             let r = pixel[0] as f32;
-//             let g = pixel[1] as f32;
-//             let b = pixel[2] as f32;
-
-//             // Y component
-//             y_plane.push((0.299 * r + 0.587 * g + 0.114 * b).round() as u8);
-
-//             // Subsample U and V (simple 2x2 average)
-//             if x % 2 == 0 && y % 2 == 0 {
-//                 let u = (-0.169 * r - 0.331 * g + 0.5 * b + 128.0)
-//                     .round()
-//                     .clamp(0.0, 255.0) as u8;
-//                 let v = (0.5 * r - 0.419 * g - 0.081 * b + 128.0)
-//                     .round()
-//                     .clamp(0.0, 255.0) as u8;
-//                 u_plane.push(u);
-//                 v_plane.push(v);
-//             }
-//         }
-//     }
-
-//     let mut yuv_data = y_plane;
-//     yuv_data.extend(u_plane);
-//     yuv_data.extend(v_plane);
-//     (yuv_data, (width, height))
-// }
-
-pub fn convert_func() {
+pub fn convert_func(output_file: &String, framerate: &String) {
     let image_dir = "/tmp/qrcode_files";
+    let framerate_int: u8 = framerate.parse::<u8>().unwrap();
     let pattern = format!("{}/*.png", image_dir); // Change to your image extension
     println!("pattern: {}", pattern);
-    let output_file = "output.mp4".to_string();
     let x264_opts = parse_opts(DEFAULT_X264_OPTS.to_string()).unwrap();
 
     eprintln!("x264 options: {:?}", x264_opts);
@@ -287,7 +215,7 @@ pub fn convert_func() {
     ffmpeg::init().unwrap();
     log::set_level(log::Level::Debug);
 
-    let mut octx = format::output(&output_file).unwrap();
+    let mut octx = format::output(output_file).unwrap();
 
     // Set up for stream copy for non-video stream.
 
@@ -303,6 +231,7 @@ pub fn convert_func() {
         img_temp.width(),
         img_temp.height(),
         &pattern,
+        framerate_int,
         &mut octx,
         x264_opts,
     )
@@ -313,22 +242,6 @@ pub fn convert_func() {
     );
     transcoder.receive_and_process_decoded_frames();
 
-    // Flush encoders and decoders.let img_temp = image::open("/tmp/qrcode_files/qrcode1.png").unwrap();
-    // let mut transcoder = match Transcoder::new(
-    //     img_temp.width(),
-    //     img_temp.height(),
-    //     &pattern,
-    //     &mut octx,
-    //     ost_index,
-    //     x264_opts,
-    //     false,
-    // ) {
-    //     Ok(t) => t,
-    //     Err(e) => {
-    //         eprintln!("Failed to create transcoder: {}", e);
-    //         return;
-    //     }
-    // };
     println!(
         "Stream frame rate: {:?}",
         octx.stream(0).unwrap().avg_frame_rate()
