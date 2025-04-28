@@ -5,9 +5,9 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/rust-qr-code",
-        "args": ["/Users/louis/prog/rust-qr-code/qrcode0.png"],
+        "args": ["-i", "/Users/louis/prog/rust-qr-code/output.mp4", "-o", "/Users/louis/prog/rust-qr-code/tmp/qr.xz", "-d"],
         "stopAtEntry": true,
-        "cwd": "${fileDirname}",
+        "cwd": "${workspaceFolder}",
         "environment": [],
         "externalConsole": false,
         "MIMode": "lldb"

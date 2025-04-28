@@ -1,11 +1,14 @@
 extern crate ffmpeg_next as ffmpeg;
 use crate::qr_generation::{clean_environnement, create_environement};
 use glob::glob;
-use image::{GenericImage, GenericImageView, RgbImage};
+use image::{GenericImage, GenericImageView, Luma, RgbImage, buffer};
 use rqrr;
 use std::fmt::write;
 use std::fs;
-use std::io::Write; // bring trait into scope
+use std::io::{Error, Write};
+use std::panic::UnwindSafe;
+// bring trait into scope
+use std::cmp::Ordering;
 use std::path::PathBuf;
 
 use ffmpeg::format::{Pixel, input};
@@ -15,7 +18,7 @@ use ffmpeg::util::frame::video::Video;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
-use xz::write;
+use xz::read::XzDecoder;
 
 fn decode_vid(parsed_arguments: &[Option<&String>; 4]) -> Result<(), ffmpeg::Error> {
     create_environement();
@@ -74,45 +77,10 @@ fn decode_vid(parsed_arguments: &[Option<&String>; 4]) -> Result<(), ffmpeg::Err
                             img.put_pixel(x, y, image::Rgb([pixel[0], pixel[1], pixel[2]]));
                         }
                     }
-                    img.save(format!("/tmp/qrcode_files/frame{}.png", frame_index))
+                    img.save(format!("/tmp/qrcode_files/{}.png", frame_index))
                         .unwrap();
                     println!("I went here!");
                     frame_index += 1;
-                    // // Copy each line separately, accounting for padding
-                    // for y in 0..frame_height {
-                    //     let src_offset = y * frame_height * 3; // 3 bytes per pixel for RGB24
-                    //     let dst_offset = y * frame_linesizes;
-
-                    //     unsafe {
-                    //         std::ptr::copy_nonoverlapping(
-                    //             frame_data2.as_ptr().add(src_offset as usize),
-                    //             frame_data.as_mut_ptr().add(dst_offset as usize),
-                    //             (frame_width * 3) as usize,
-                    //         );
-                    //     }
-                    // }
-
-                    // // Verify frame data before saving
-                    // if rgb_frame.format() != Pixel::RGB24 {
-                    //     eprintln!(
-                    //         "Warning: Output frame is not RGB24 (got {:?})",
-                    //         rgb_frame.format()
-                    //     );
-                    // }
-                    // let jpeg_path = Path::new("output.jpg");
-                    // let mut jpeg_file = std::fs::File::create(jpeg_path).unwrap();
-                    // let mut encoder = JpegEncoder::new(&mut jpeg_file);
-                    // encoder
-                    //     .encode(
-                    //         &rgb_frame.data(0),
-                    //         rgb_frame.width(),
-                    //         rgb_frame.height(),
-                    //         image::ExtendedColorType::Rgb8,
-                    //     )
-                    //     .unwrap();
-                    // // save_ppm(&rgb_frame, frame_index).map_err(|e| ffmpeg::Error::Other { errno: 0 })?;
-
-                    // frame_index += 1;
                 }
                 Ok(())
             };
@@ -129,28 +97,63 @@ fn decode_vid(parsed_arguments: &[Option<&String>; 4]) -> Result<(), ffmpeg::Err
     Ok(())
 }
 
+fn sort_the_vector_right(a: &PathBuf, b: &PathBuf) -> Ordering {
+    let mut a = String::from(
+        a.file_name()
+            .expect("The file name of a was missing")
+            .to_str()
+            .unwrap(),
+    );
+    let mut b = String::from(
+        b.file_name()
+            .expect("The file name of b was missing")
+            .to_str()
+            .unwrap(),
+    );
+    for i in [&mut a, &mut b] {
+        *i = i.replace(".png", "");
+    }
+
+    let a_int = a.parse::<u16>().unwrap();
+    let b_int = b.parse::<u16>().unwrap();
+
+    return a_int.cmp(&b_int);
+}
 pub fn decode_from_mp4(parsed_arguments: &[Option<&String>; 4]) {
     let image_dir = "/tmp/qrcode_files";
-    let _ = decode_vid(&parsed_arguments);
+    let _ = decode_vid(&parsed_arguments).unwrap();
     let mut data: Vec<u8> = Vec::new();
     let mut data_from_img: Vec<u8>;
 
     let pattern = format!("{}/*.png", image_dir); // Change to your image extension
 
-    let images: Vec<PathBuf> = glob(pattern.as_str())
+    let mut images: Vec<PathBuf> = glob(pattern.as_str())
         .expect("Failed to read glob pattern")
         .filter_map(Result::ok)
         .collect();
+    images.sort_by(|a, b| sort_the_vector_right(a, b));
     println!("{:?}", images);
 
     for i in images {
         data_from_img = decode_img(i);
-        println!("{:?}", data);
-        data.append(&mut data_from_img);
+        for y in data_from_img {
+            data.push(y);
+        }
+        println!("{:?} bytes", &data.len());
     }
+    let mut temp_ninja_shit = fs::File::create("tmp1.xz").unwrap();
+    temp_ninja_shit.write_all(&data).unwrap();
+    // data = data[..=int_input as usize].to_vec();
+    let mut buffer_vec: Vec<u8> = Vec::new();
+    let mut buffer_string: String = String::new();
 
-    let mut uncompressed = write::XzDecoder::new(data);
-    let data = uncompressed.finish().unwrap();
+    let mut uncompressed = XzDecoder::new(data.as_slice());
+    let mut data_from_file =
+        || -> Result<usize, std::io::Error> { Ok(uncompressed.read_to_end(&mut buffer_vec)?) };
+    // = uncompressed.read_to_end(&mut buffer);
+    if let Err(err) = data_from_file() {
+        uncompressed.read_to_string(&mut buffer_string).unwrap();
+    };
 
     let mut file = fs::OpenOptions::new()
         .create(true)
@@ -159,23 +162,60 @@ pub fn decode_from_mp4(parsed_arguments: &[Option<&String>; 4]) {
         // either use the ? operator or unwrap since it returns a Result
         .open(&parsed_arguments[1].unwrap())
         .unwrap();
-    assert!(uncompressed.finish().unwrap().len() != 0);
-    file.write_all(&data).unwrap();
+    // assert!(uncompressed.finish().unwrap().len() != 0);
+    if !buffer_vec.is_empty() {
+        file.write_all(&buffer_vec).unwrap();
+    } else {
+        file.write_all(buffer_string.as_bytes()).unwrap();
+    }
 
     clean_environnement();
 }
 
 fn decode_img(img_path: PathBuf) -> Vec<u8> {
-    let img = image::open(img_path).unwrap().to_luma8();
+    let filename = img_path.file_name().expect("lol what?").to_str().unwrap();
+    let img = image::open(&img_path).unwrap().to_luma8();
     // Prepare for detection
     let mut img = rqrr::PreparedImage::prepare(img);
-    // Search for grids, without decoding
+    // Search for grids, without &decoding
     let grids = img.detect_grids();
     assert_eq!(grids.len(), 1);
     let mut data = Vec::new();
     // Decode the grid
     let _ = grids[0].decode_to(&mut data).unwrap();
     assert!(data.len() != 0);
-    println!("I went here!");
+    println!("{} is done!", filename);
     return data;
+}
+
+fn decode_img_with_data(img_data: image::ImageBuffer<Luma<u8>, Vec<u8>>) -> Vec<u8> {
+    // Prepare for detection
+
+    let mut img = rqrr::PreparedImage::prepare(img_data);
+    // Search for grids, without decoding
+    let grids = img.detect_grids();
+    if grids.len() != 1 {
+        println!("Detected no or multiple qrcodes, exiting...");
+    }
+    assert_eq!(grids.len(), 1);
+
+    let mut data = Vec::new();
+    // Decode the grid
+    let _ = grids[0].decode_to(&mut data).unwrap();
+    assert!(data.len() != 0);
+    return data;
+}
+
+pub fn debug_data(
+    encoded_data: &[u8],
+    image_data: image::ImageBuffer<Luma<u8>, Vec<u8>>,
+) -> Result<(), String> {
+    let is_data_same = encoded_data != decode_img_with_data(image_data).as_slice();
+    if is_data_same {
+        println!("Assertion failed, program will exist now: {}", is_data_same);
+        return Err(String::from("AAAAAAAH"));
+    }
+
+    println!("the data was successfully checked");
+    Ok(())
 }

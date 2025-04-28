@@ -937,7 +937,6 @@ name = "rust-qr-code"
 version = "0.1.0"
 dependencies = [
  "ffmpeg-next",
- "gif",
  "glob",
  "image",
  "luma",

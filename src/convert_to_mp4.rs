@@ -1,21 +1,25 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    thread,
+    time::{self, Duration},
+};
 
 use ffmpeg::{Dictionary, Packet, Rational, codec, encoder, format, frame, log};
 use glob::glob;
-use image::EncodableLayout;
 use image::imageops::FilterType;
 
-// const DEFAULT_X264_OPTS: &str = "preset=medium";
 const DEFAULT_X264_OPTS: &str = "";
-
 struct Transcoder {
     encoder: encoder::Video,
     frame_count: usize,
     framerate: u8,
     images: Vec<PathBuf>,
     scaler: ffmpeg::software::scaling::Context,
+    data_encoded_numb: u32,
+    octx: format::context::Output,
+    frame_count_for_packets: u32,
 }
 
 fn parse_opts<'a>(s: String) -> Option<Dictionary<'a>> {
@@ -36,7 +40,7 @@ impl Transcoder {
         height: u32,
         pattern: &str,
         framerate: u8,
-        octx: &mut format::context::Output,
+        mut octx: format::context::Output,
         x264_opts: Dictionary,
     ) -> Result<Self, ffmpeg::Error> {
         let codec = encoder::find(codec::Id::H264);
@@ -116,6 +120,9 @@ impl Transcoder {
             framerate: framerate,
             images: images,
             scaler: scaler,
+            data_encoded_numb: 0,
+            octx: octx,
+            frame_count_for_packets: 0,
         })
     }
     fn copy_image_to_frame(
@@ -179,7 +186,6 @@ impl Transcoder {
                 .unwrap()
                 .resize_exact(width, height, FilterType::Lanczos3)
                 .to_rgb8();
-            println!("{}, {}", img.as_bytes().len(), width * height * 3);
 
             Transcoder::copy_image_to_frame(&mut rgb_frame, &img, width as usize, height as usize)
                 .unwrap();
@@ -195,11 +201,56 @@ impl Transcoder {
     }
 
     fn send_frame_to_encoder(&mut self, frame: &frame::Video) {
-        self.encoder.send_frame(frame).unwrap();
+        loop {
+            match self.encoder.send_frame(frame) {
+                Ok(_) => {
+                    println!("It works! {} images done!", self.data_encoded_numb);
+                    self.data_encoded_numb += 1;
+                    break;
+                }
+                Err(err) => {
+                    println!("Gosh dang it!, {}", err);
+                    self.recieve_packets_and_flush();
+                }
+            }
+        }
     }
 
     fn send_eof_to_encoder(&mut self) {
         self.encoder.send_eof().unwrap();
+    }
+
+    fn recieve_packets_and_flush(&mut self) {
+        let mut packet: Packet = Packet::empty();
+
+        loop {
+            match self.encoder.receive_packet(&mut packet) {
+                Ok(()) => {
+                    packet.set_stream(0);
+
+                    match packet.write_interleaved(&mut self.octx) {
+                        Ok(_) => println!("Packet written successfully."),
+                        Err(e) => eprintln!("Error writing packet: {}", e),
+                    }
+
+                    packet = Packet::empty(); // Clear the packet for next use
+                }
+                Err(ffmpeg::Error::Other {
+                    errno: ffmpeg::util::error::EAGAIN,
+                }) => {
+                    println!("encoding is done");
+                    break;
+                }
+                Err(ffmpeg::Error::Eof) => {
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("Error receiving packet: {}", e);
+                    break;
+                }
+            }
+            self.frame_count_for_packets += 1;
+        }
     }
 }
 
@@ -232,44 +283,32 @@ pub fn convert_func(output_file: &String, framerate: &String) {
         img_temp.height(),
         &pattern,
         framerate_int,
-        &mut octx,
+        octx,
         x264_opts,
     )
     .unwrap();
-    println!(
-        "Output stream time base: {:?}",
-        octx.stream(0).unwrap().time_base()
-    );
+    // println!(
+    //     "Output stream time base: {:?}",
+    //     octx.stream(0).unwrap().time_base()
+    // );
     transcoder.receive_and_process_decoded_frames();
 
-    println!(
-        "Stream frame rate: {:?}",
-        octx.stream(0).unwrap().avg_frame_rate()
-    );
-
-    assert_eq!(
-        octx.stream(0).unwrap().avg_frame_rate(),
-        transcoder.encoder.frame_rate()
-    );
-    transcoder.frame_count = 0;
+    // assert_eq!(
+    //     octx.stream(0).unwrap().avg_frame_rate(),
+    //     transcoder.encoder.frame_rate()
+    // );
     println!("Encoder frame rate: {:?}", transcoder.encoder.frame_rate());
     // Process frames
     // transcoder.receive_and_process_decoded_frames();
     transcoder.send_eof_to_encoder();
     // FLUSH THE ENCODER PROPERLY
-    let mut packet = Packet::empty();
+    let mut packet: Packet = Packet::empty();
     loop {
         match transcoder.encoder.receive_packet(&mut packet) {
             Ok(()) => {
                 packet.set_stream(0);
-                // packet.set_pts(Some(transcoder.frame_count as i64));
-                // packet.set_dts(Some(transcoder.frame_count as i64));
-                // packet.set_time_base(Rational::new(1, 15360));
-                // packet.rescale_ts(
-                //     Rational::new(1, 15360), // Input timebase (should match encoder setting)
-                //     octx.stream(0).unwrap().time_base(), // Output timebase
-                // );
-                match packet.write_interleaved(&mut octx) {
+
+                match packet.write_interleaved(&mut transcoder.octx) {
                     Ok(_) => println!("Packet written successfully."),
                     Err(e) => eprintln!("Error writing packet: {}", e),
                 }
@@ -279,11 +318,9 @@ pub fn convert_func(output_file: &String, framerate: &String) {
             Err(ffmpeg::Error::Other {
                 errno: ffmpeg::util::error::EAGAIN,
             }) => {
-                // Encoder needs more input, but we've already sent EOF, so we're done
                 break;
             }
             Err(ffmpeg::Error::Eof) => {
-                // Encoder is fully flushed
                 break;
             }
             Err(e) => {
@@ -294,15 +331,17 @@ pub fn convert_func(output_file: &String, framerate: &String) {
         transcoder.frame_count += 1;
     }
     assert_eq!(
-        octx.stream(0).unwrap().avg_frame_rate(),
+        transcoder.octx.stream(0).unwrap().avg_frame_rate(),
         transcoder.encoder.frame_rate()
     );
     //     transcoder.send_eof_to_encoder();
     // println!("done that");
     // Now write trailer
-    println!("done that");
-    if let Err(e) = octx.write_trailer() {
+    if let Err(e) = transcoder.octx.write_trailer() {
         eprintln!("Failed to write trailer: {}", e);
     }
-    println!("stuff: {:?}", octx.stream(0).unwrap().avg_frame_rate());
+    println!(
+        "stuff: {:?}",
+        transcoder.octx.stream(0).unwrap().avg_frame_rate()
+    );
 }
