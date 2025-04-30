@@ -123,7 +123,7 @@ pub fn decode_from_mp4(parsed_arguments: &[Option<&String>; 4]) {
         || -> Result<usize, std::io::Error> { Ok(uncompressed.read_to_end(&mut buffer_vec)?) };
     // = uncompressed.read_to_end(&mut buffer);
     if let Err(err) = data_from_file() {
-        panic!("trololololololololol {}", err)
+        panic!("Error in Smth idk: {}", err)
     };
 
     let mut file = fs::OpenOptions::new()
