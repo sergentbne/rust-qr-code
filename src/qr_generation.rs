@@ -39,8 +39,7 @@ fn compress_file<'a>(
         let mut decoder_test: XzDecoder<&[u8]> = XzDecoder::new(data_temp);
         let stuff = decoder_test.read_to_end(&mut shithead).unwrap();
         assert!(stuff != 0);
-        let mut temp_ninja_shit = std::fs::File::create("tmp2.xz").unwrap();
-        temp_ninja_shit.write_all(&data_temp).unwrap();
+
         // println!("{:?}", shithead);
     }
 
