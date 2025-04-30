@@ -1,10 +1,6 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use std::{
-    path::PathBuf,
-    thread,
-    time::{self, Duration},
-};
+use std::path::PathBuf;
 
 use ffmpeg::{Dictionary, Packet, Rational, codec, encoder, format, frame, log};
 use glob::glob;
