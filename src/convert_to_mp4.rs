@@ -10,6 +10,8 @@ use ffmpeg::{Dictionary, Packet, Rational, codec, encoder, format, frame, log};
 use glob::glob;
 use image::imageops::FilterType;
 
+use crate::sort_lib::sort_the_vector_right;
+
 const DEFAULT_X264_OPTS: &str = "";
 struct Transcoder {
     encoder: encoder::Video,
@@ -109,10 +111,11 @@ impl Transcoder {
         );
 
         println!("All output context streams {:?}", &octx.streams().count());
-        let images: Vec<PathBuf> = glob(pattern)
+        let mut images: Vec<PathBuf> = glob(pattern)
             .expect("Failed to read glob pattern")
             .filter_map(Result::ok)
             .collect();
+        images.sort_by(|a, b| sort_the_vector_right(a, b));
 
         Ok(Self {
             encoder: opened_encoder,
@@ -266,7 +269,7 @@ pub fn convert_func(output_file: &String, framerate: &String) {
     ffmpeg::init().unwrap();
     log::set_level(log::Level::Debug);
 
-    let mut octx = format::output(output_file).unwrap();
+    let octx = format::output(output_file).unwrap();
 
     // Set up for stream copy for non-video stream.
 
@@ -276,7 +279,7 @@ pub fn convert_func(output_file: &String, framerate: &String) {
 
     format::context::output::dump(&octx, 0, Some(&output_file));
     // octx.write_header().unwrap();
-    let img_temp = image::open("/tmp/qrcode_files/qrcode1.png").unwrap();
+    let img_temp = image::open("/tmp/qrcode_files/1.png").unwrap();
 
     let mut transcoder = Transcoder::new(
         img_temp.width(),

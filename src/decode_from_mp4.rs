@@ -1,22 +1,19 @@
 extern crate ffmpeg_next as ffmpeg;
+
 use crate::qr_generation::{clean_environnement, create_environement};
 use glob::glob;
-use image::{GenericImage, GenericImageView, Luma, RgbImage, buffer};
+use image::{GenericImage, GenericImageView, Luma, RgbImage};
 use rqrr;
-use std::fmt::write;
 use std::fs;
 use std::io::{Error, Write};
-use std::panic::UnwindSafe;
 // bring trait into scope
-use std::cmp::Ordering;
+use crate::sort_lib::sort_the_vector_right;
 use std::path::PathBuf;
 
 use ffmpeg::format::{Pixel, input};
 use ffmpeg::media::Type;
 use ffmpeg::software::scaling::{context::Context, flag::Flags};
 use ffmpeg::util::frame::video::Video;
-use std::env;
-use std::fs::File;
 use std::io::prelude::*;
 use xz::read::XzDecoder;
 
@@ -97,31 +94,9 @@ fn decode_vid(parsed_arguments: &[Option<&String>; 4]) -> Result<(), ffmpeg::Err
     Ok(())
 }
 
-fn sort_the_vector_right(a: &PathBuf, b: &PathBuf) -> Ordering {
-    let mut a = String::from(
-        a.file_name()
-            .expect("The file name of a was missing")
-            .to_str()
-            .unwrap(),
-    );
-    let mut b = String::from(
-        b.file_name()
-            .expect("The file name of b was missing")
-            .to_str()
-            .unwrap(),
-    );
-    for i in [&mut a, &mut b] {
-        *i = i.replace(".png", "");
-    }
-
-    let a_int = a.parse::<u16>().unwrap();
-    let b_int = b.parse::<u16>().unwrap();
-
-    return a_int.cmp(&b_int);
-}
 pub fn decode_from_mp4(parsed_arguments: &[Option<&String>; 4]) {
     let image_dir = "/tmp/qrcode_files";
-    let _ = decode_vid(&parsed_arguments).unwrap();
+    let _ = decode_vid(parsed_arguments).unwrap();
     let mut data: Vec<u8> = Vec::new();
     let mut data_from_img: Vec<u8>;
 
@@ -132,7 +107,6 @@ pub fn decode_from_mp4(parsed_arguments: &[Option<&String>; 4]) {
         .filter_map(Result::ok)
         .collect();
     images.sort_by(|a, b| sort_the_vector_right(a, b));
-    println!("{:?}", images);
 
     for i in images {
         data_from_img = decode_img(i);
@@ -145,14 +119,13 @@ pub fn decode_from_mp4(parsed_arguments: &[Option<&String>; 4]) {
     temp_ninja_shit.write_all(&data).unwrap();
     // data = data[..=int_input as usize].to_vec();
     let mut buffer_vec: Vec<u8> = Vec::new();
-    let mut buffer_string: String = String::new();
 
     let mut uncompressed = XzDecoder::new(data.as_slice());
     let mut data_from_file =
         || -> Result<usize, std::io::Error> { Ok(uncompressed.read_to_end(&mut buffer_vec)?) };
     // = uncompressed.read_to_end(&mut buffer);
     if let Err(err) = data_from_file() {
-        uncompressed.read_to_string(&mut buffer_string).unwrap();
+        panic!("trololololololololol {}", err)
     };
 
     let mut file = fs::OpenOptions::new()
@@ -165,8 +138,6 @@ pub fn decode_from_mp4(parsed_arguments: &[Option<&String>; 4]) {
     // assert!(uncompressed.finish().unwrap().len() != 0);
     if !buffer_vec.is_empty() {
         file.write_all(&buffer_vec).unwrap();
-    } else {
-        file.write_all(buffer_string.as_bytes()).unwrap();
     }
 
     clean_environnement();
@@ -179,6 +150,12 @@ fn decode_img(img_path: PathBuf) -> Vec<u8> {
     let mut img = rqrr::PreparedImage::prepare(img);
     // Search for grids, without &decoding
     let grids = img.detect_grids();
+    if grids.len() != 1 {
+        for i in &grids {
+            println!("grid bounds {:?}", i.bounds)
+        }
+        println!("Detected no or multiple qrcodes, exiting...");
+    }
     assert_eq!(grids.len(), 1);
     let mut data = Vec::new();
     // Decode the grid
@@ -194,10 +171,13 @@ fn decode_img_with_data(img_data: image::ImageBuffer<Luma<u8>, Vec<u8>>) -> Vec<
     let mut img = rqrr::PreparedImage::prepare(img_data);
     // Search for grids, without decoding
     let grids = img.detect_grids();
-    if grids.len() != 1 {
-        println!("Detected no or multiple qrcodes, exiting...");
-    }
-    assert_eq!(grids.len(), 1);
+
+    // if grids.len() != 1 {
+    //     for i in &grids {
+    //         println!("grid bounds {:?}", i.bounds)
+    //     }
+    //     println!("Detected no or multiple qrcodes, exiting...");
+    // }
 
     let mut data = Vec::new();
     // Decode the grid
@@ -216,6 +196,5 @@ pub fn debug_data(
         return Err(String::from("AAAAAAAH"));
     }
 
-    println!("the data was successfully checked");
     Ok(())
 }
