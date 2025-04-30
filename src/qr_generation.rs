@@ -74,7 +74,7 @@ pub fn clean_environnement() {
 fn create_qr_code_from_data(data: &[u8], qr_number: u16) {
     let code: QrCode = QrCode::new(data).unwrap();
 
-    let mut file_string: String = String::from("/tmp/qrcode_files/qrcode{}.png");
+    let mut file_string: String = String::from("/tmp/qrcode_files/{}.png");
     let qr_number_string: String = qr_number.to_string();
     // Render the bits into an image.
     let image: image::ImageBuffer<Luma<u8>, Vec<u8>> = code.render::<Luma<u8>>().build();
@@ -107,7 +107,9 @@ fn get_data_from_file(data: &mut VecDeque<u8>) {
         tmp.truncate(interrupt);
         qrcode_counter += 1;
         total_size += tmp.len();
+
         println!("Total encoded: {}", total_size);
+
         create_qr_code_from_data(tmp.as_slice(), qrcode_counter);
     }
     println!("finished reading the file                                      ");
