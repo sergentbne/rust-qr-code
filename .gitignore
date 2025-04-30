@@ -4,3 +4,6 @@ output.*
 fakefile_201MB.txt
 qr.png
 tmp/qr.xz
+*.pdf
+*.png
+*.xz
