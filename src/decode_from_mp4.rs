@@ -2,10 +2,10 @@ extern crate ffmpeg_next as ffmpeg;
 
 use crate::qr_generation::{clean_environnement, create_environement};
 use glob::glob;
-use image::{GenericImage, GenericImageView, Luma, RgbImage};
+use image::{Luma, RgbImage};
 use rqrr;
 use std::fs;
-use std::io::{Error, Write};
+use std::io::Write;
 // bring trait into scope
 use crate::sort_lib::sort_the_vector_right;
 use std::path::PathBuf;

@@ -1,6 +1,6 @@
 use crate::convert_to_mp4::convert_func;
 use crate::decode_from_mp4::debug_data;
-use image::{Luma, buffer};
+use image::Luma;
 use qrcode::QrCode;
 
 use std::collections::VecDeque;
