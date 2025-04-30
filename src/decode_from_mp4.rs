@@ -76,7 +76,7 @@ fn decode_vid(parsed_arguments: &[Option<&String>; 4]) -> Result<(), ffmpeg::Err
                     }
                     img.save(format!("/tmp/qrcode_files/{}.png", frame_index))
                         .unwrap();
-                    println!("I went here!");
+                    println!("{}.png decoded!", frame_index);
                     frame_index += 1;
                 }
                 Ok(())
@@ -115,8 +115,6 @@ pub fn decode_from_mp4(parsed_arguments: &[Option<&String>; 4]) {
         }
         println!("{:?} bytes", &data.len());
     }
-    let mut temp_ninja_shit = fs::File::create("tmp1.xz").unwrap();
-    temp_ninja_shit.write_all(&data).unwrap();
     // data = data[..=int_input as usize].to_vec();
     let mut buffer_vec: Vec<u8> = Vec::new();
 
@@ -156,7 +154,6 @@ fn decode_img(img_path: PathBuf) -> Vec<u8> {
         }
         println!("Detected no or multiple qrcodes, exiting...");
     }
-    assert_eq!(grids.len(), 1);
     let mut data = Vec::new();
     // Decode the grid
     let _ = grids[0].decode_to(&mut data).unwrap();
