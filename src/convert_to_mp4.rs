@@ -216,7 +216,12 @@ impl Transcoder {
     }
 
     fn send_eof_to_encoder(&mut self) {
-        self.encoder.send_eof().unwrap();
+        loop {
+            match self.encoder.send_eof() {
+                Ok(()) => break,
+                Err(err) => self.recieve_packets_and_flush(),
+            }
+        }
     }
 
     fn recieve_packets_and_flush(&mut self) {
