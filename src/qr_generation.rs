@@ -70,7 +70,7 @@ pub fn clean_environnement() {
         ),
     };
 }
-fn create_qr_code_from_data(data: &[u8], qr_number: u16) {
+fn create_qr_code_from_data(data: &[u8], qr_number: u32) {
     let code: QrCode = QrCode::new(data).unwrap();
 
     let mut file_string: String = String::from("/tmp/qrcode_files/{}.png");
@@ -89,9 +89,10 @@ fn create_qr_code_from_data(data: &[u8], qr_number: u16) {
 
 fn get_data_from_file(data: &mut VecDeque<u8>) {
     let mut buffer: [u8; 2048] = [0; 2048];
-    let mut qrcode_counter: u16 = 0;
+    let mut qrcode_counter: u32 = 0;
     let mut interrupt = buffer.len();
     let mut total_size = 0;
+    let total_data_of_file = data.len().clone() as f32;
     while data.len() != 0 {
         let mut tmp: Vec<u8>;
         for (i, elem) in &mut buffer.iter_mut().enumerate() {
@@ -107,7 +108,12 @@ fn get_data_from_file(data: &mut VecDeque<u8>) {
         qrcode_counter += 1;
         total_size += tmp.len();
 
-        println!("Total encoded: {}", total_size);
+        println!(
+            "\rTotal encoded: {}/{} [{}%]",
+            total_size,
+            total_data_of_file,
+            (total_size as f32 / total_data_of_file * 100 as f32).floor()
+        );
 
         create_qr_code_from_data(tmp.as_slice(), qrcode_counter);
     }

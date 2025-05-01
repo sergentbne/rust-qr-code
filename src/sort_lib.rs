@@ -18,8 +18,8 @@ pub fn sort_the_vector_right(a: &PathBuf, b: &PathBuf) -> Ordering {
         *i = i.replace(".png", "");
     }
 
-    let a_int = a.parse::<u16>().unwrap();
-    let b_int = b.parse::<u16>().unwrap();
+    let a_int: u32 = a.parse::<u32>().unwrap();
+    let b_int: u32 = b.parse::<u32>().unwrap();
 
     return a_int.cmp(&b_int);
 }
