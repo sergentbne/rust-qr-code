@@ -108,16 +108,17 @@ fn get_data_from_file(data: &mut VecDeque<u8>) {
         qrcode_counter += 1;
         total_size += tmp.len();
 
-        println!(
+        print!(
             "\rTotal encoded: {}/{} [{}%]",
             total_size,
             total_data_of_file,
             (total_size as f32 / total_data_of_file * 100 as f32).floor()
         );
+        std::io::stdout().flush().unwrap();
 
         create_qr_code_from_data(tmp.as_slice(), qrcode_counter);
     }
-    println!("finished reading the file                                      ");
+    println!("\nfinished reading the file                                      ");
     println!("created {} image(s)", qrcode_counter);
 }
 
