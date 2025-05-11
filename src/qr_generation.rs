@@ -2,10 +2,12 @@ use crate::convert_to_mp4::convert_func;
 use crate::decode_from_mp4::debug_data;
 use image::Luma;
 use qrcode::QrCode;
+use std::sync::{Arc, Barrier, Condvar, Mutex};
 
 use std::collections::VecDeque;
 use std::fs::{File, create_dir, remove_dir_all};
 use std::io::{Read, Write};
+use std::thread;
 use xz::read::XzDecoder;
 use xz::write::XzEncoder;
 
@@ -70,11 +72,12 @@ pub fn clean_environnement() {
         ),
     };
 }
-fn create_qr_code_from_data(data: &[u8], qr_number: u32) {
+fn create_qr_code_from_data(data: &[u8], qr_number: &u32) {
     let code: QrCode = QrCode::new(data).unwrap();
 
     let mut file_string: String = String::from("/tmp/qrcode_files/{}.png");
     let qr_number_string: String = qr_number.to_string();
+
     // Render the bits into an image.
     let image: image::ImageBuffer<Luma<u8>, Vec<u8>> = code.render::<Luma<u8>>().build();
 
@@ -89,10 +92,13 @@ fn create_qr_code_from_data(data: &[u8], qr_number: u32) {
 
 fn get_data_from_file(data: &mut VecDeque<u8>) {
     let mut buffer: [u8; 2048] = [0; 2048];
+
     let mut qrcode_counter: u32 = 0;
     let mut interrupt = buffer.len();
     let mut total_size = 0;
+    let mut threads = Vec::new();
     let total_data_of_file = data.len().clone() as f32;
+    let max_threads: u8 = 10;
     while data.len() != 0 {
         let mut tmp: Vec<u8>;
         for (i, elem) in &mut buffer.iter_mut().enumerate() {
@@ -116,8 +122,20 @@ fn get_data_from_file(data: &mut VecDeque<u8>) {
         );
         std::io::stdout().flush().unwrap();
 
-        create_qr_code_from_data(tmp.as_slice(), qrcode_counter);
+        while threads.len() >= max_threads as usize {
+            let handle: thread::JoinHandle<()> = threads.remove(0);
+            handle.join().unwrap();
+        }
+
+        threads.push(thread::spawn(move || {
+            create_qr_code_from_data(tmp.as_slice(), &qrcode_counter);
+        }));
+        while threads.len() != 0 {
+            let handle: thread::JoinHandle<()> = threads.remove(0);
+            handle.join().unwrap();
+        }
     }
+
     println!("\nfinished reading the file                                      ");
     println!("created {} image(s)", qrcode_counter);
 }
