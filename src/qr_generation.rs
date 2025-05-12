@@ -3,8 +3,6 @@ use crate::decode_from_mp4::debug_data;
 use crate::get_path_of_temp::get_tmp_folder;
 use image::Luma;
 use qrcode::QrCode;
-use std::path::PathBuf;
-use std::sync::{Arc, Barrier, Condvar, Mutex};
 
 use std::collections::VecDeque;
 use std::fs::{File, create_dir, remove_dir_all};
