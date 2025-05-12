@@ -219,7 +219,7 @@ impl Transcoder {
         loop {
             match self.encoder.send_eof() {
                 Ok(()) => break,
-                Err(err) => self.recieve_packets_and_flush(),
+                Err(_) => self.recieve_packets_and_flush(),
             }
         }
     }
