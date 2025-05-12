@@ -6,7 +6,7 @@ use ffmpeg::{Dictionary, Packet, Rational, codec, encoder, format, frame, log};
 use glob::glob;
 use image::imageops::FilterType;
 
-use crate::sort_lib::sort_the_vector_right;
+use crate::{get_path_of_temp::get_tmp_folder, sort_lib::sort_the_vector_right};
 
 const DEFAULT_X264_OPTS: &str = "";
 struct Transcoder {
@@ -259,9 +259,9 @@ impl Transcoder {
 }
 
 pub fn convert_func(output_file: &String, framerate: &String) {
-    let image_dir = "/tmp/qrcode_files";
+    let image_dir = get_tmp_folder();
     let framerate_int: u8 = framerate.parse::<u8>().unwrap();
-    let pattern = format!("{}/*.png", image_dir); // Change to your image extension
+    let pattern = format!("{}/*.png", image_dir.display()); // Change to your image extension
     println!("pattern: {}", pattern);
     let x264_opts = parse_opts(DEFAULT_X264_OPTS.to_string()).unwrap();
 
@@ -279,8 +279,11 @@ pub fn convert_func(output_file: &String, framerate: &String) {
     // there's no high level API to do this (yet).
 
     format::context::output::dump(&octx, 0, Some(&output_file));
+    let mut img_temp = get_tmp_folder();
+    img_temp.push("1.png");
+
     // octx.write_header().unwrap();
-    let img_temp = image::open("/tmp/qrcode_files/1.png").unwrap();
+    let img_temp = image::open(img_temp).unwrap();
 
     let mut transcoder = Transcoder::new(
         img_temp.width(),
