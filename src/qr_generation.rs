@@ -1,7 +1,9 @@
 use crate::convert_to_mp4::convert_func;
 use crate::decode_from_mp4::debug_data;
+use crate::get_path_of_temp::get_tmp_folder;
 use image::Luma;
 use qrcode::QrCode;
+use std::path::PathBuf;
 use std::sync::{Arc, Barrier, Condvar, Mutex};
 
 use std::collections::VecDeque;
@@ -50,7 +52,7 @@ fn compress_file<'a>(
 }
 
 pub fn create_environement() -> () {
-    match create_dir("/tmp/qrcode_files") {
+    match create_dir(get_tmp_folder()) {
         Ok(_) => {
             println!("Written directory in tmp for files")
         }
@@ -62,7 +64,7 @@ pub fn create_environement() -> () {
 }
 
 pub fn clean_environnement() {
-    match remove_dir_all("/tmp/qrcode_files") {
+    match remove_dir_all(get_tmp_folder()) {
         Ok(_) => {
             println!("Deleted directory in tmp for files")
         }
@@ -75,13 +77,16 @@ pub fn clean_environnement() {
 fn create_qr_code_from_data(data: &[u8], qr_number: &u32) {
     let code: QrCode = QrCode::new(data).unwrap();
 
-    let mut file_string: String = String::from("/tmp/qrcode_files/{}.png");
+    let mut file_string: String = String::from("[]/{}.png");
     let qr_number_string: String = qr_number.to_string();
 
     // Render the bits into an image.
     let image: image::ImageBuffer<Luma<u8>, Vec<u8>> = code.render::<Luma<u8>>().build();
 
-    file_string = file_string.replace("{}", &qr_number_string);
+    file_string = file_string
+        .replace("{}", &qr_number_string)
+        .replace("[]", get_tmp_folder().to_str().expect("lolla"));
+
     image.save(file_string).unwrap();
     #[cfg(debug_assertions)]
     {

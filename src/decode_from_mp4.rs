@@ -1,5 +1,6 @@
 extern crate ffmpeg_next as ffmpeg;
 
+use crate::get_path_of_temp::get_tmp_folder;
 use crate::qr_generation::{clean_environnement, create_environement};
 use glob::glob;
 use image::{Luma, RgbImage};
@@ -74,8 +75,10 @@ fn decode_vid(parsed_arguments: &[Option<&String>; 4]) -> Result<(), ffmpeg::Err
                             img.put_pixel(x, y, image::Rgb([pixel[0], pixel[1], pixel[2]]));
                         }
                     }
-                    img.save(format!("/tmp/qrcode_files/{}.png", frame_index))
-                        .unwrap();
+                    let frame_index_str = format!("{}.png", frame_index);
+                    let mut tmp_img_dir = get_tmp_folder();
+                    tmp_img_dir.push(frame_index_str);
+                    img.save(tmp_img_dir).unwrap();
                     println!("{}.png decoded!", frame_index);
                     frame_index += 1;
                 }
@@ -95,12 +98,12 @@ fn decode_vid(parsed_arguments: &[Option<&String>; 4]) -> Result<(), ffmpeg::Err
 }
 
 pub fn decode_from_mp4(parsed_arguments: &[Option<&String>; 4]) {
-    let image_dir = "/tmp/qrcode_files";
+    let image_dir = get_tmp_folder();
     let _ = decode_vid(parsed_arguments).unwrap();
     let mut data: Vec<u8> = Vec::new();
     let mut data_from_img: Vec<u8>;
 
-    let pattern = format!("{}/*.png", image_dir); // Change to your image extension
+    let pattern = format!("{}/*.png", image_dir.display()); // Change to your image extension
 
     let mut images: Vec<PathBuf> = glob(pattern.as_str())
         .expect("Failed to read glob pattern")
