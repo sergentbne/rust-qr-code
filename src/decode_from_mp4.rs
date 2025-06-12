@@ -172,13 +172,6 @@ fn decode_img_with_data(img_data: image::ImageBuffer<Luma<u8>, Vec<u8>>) -> Vec<
     // Search for grids, without decoding
     let grids = img.detect_grids();
 
-    // if grids.len() != 1 {
-    //     for i in &grids {
-    //         println!("grid bounds {:?}", i.bounds)
-    //     }
-    //     println!("Detected no or multiple qrcodes, exiting...");
-    // }
-
     let mut data = Vec::new();
     // Decode the grid
     let _ = grids[0].decode_to(&mut data).unwrap();
