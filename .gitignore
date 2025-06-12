@@ -3,10 +3,12 @@ output.*
 .DS_Store
 fakefile_201MB.txt
 qr.png
-tmp/qr.xz
+tmp/*
 *.pdf
 *.png
 *.xz
 *.txt
 handmaid.azw3
 ad.docx.zip 
+*.mp4
+*.av1
