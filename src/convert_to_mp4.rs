@@ -18,6 +18,7 @@ struct Transcoder {
     data_encoded_numb: u32,
     octx: format::context::Output,
     frame_count_for_packets: u32,
+    nb_of_images: u32,
 }
 
 fn parse_opts<'a>(s: String) -> Option<Dictionary<'a>> {
@@ -40,10 +41,10 @@ impl Transcoder {
         framerate: u8,
         mut octx: format::context::Output,
         x264_opts: Dictionary,
+        nb_of_images: u32,
     ) -> Result<Self, ffmpeg::Error> {
         let codec = encoder::find(codec::Id::H264);
         let mut ost = octx.add_stream(codec)?;
-
         let mut encoder =
             codec::context::Context::new_with_codec(codec.ok_or(ffmpeg::Error::InvalidData)?)
                 .encoder()
@@ -122,6 +123,7 @@ impl Transcoder {
             data_encoded_numb: 0,
             octx: octx,
             frame_count_for_packets: 0,
+            nb_of_images,
         })
     }
     fn copy_image_to_frame(
@@ -183,7 +185,6 @@ impl Transcoder {
                 .unwrap()
                 .decode()
                 .unwrap()
-                .resize_exact(width, height, FilterType::Lanczos3)
                 .to_rgb8();
 
             Transcoder::copy_image_to_frame(&mut rgb_frame, &img, width as usize, height as usize)
@@ -203,12 +204,17 @@ impl Transcoder {
         loop {
             match self.encoder.send_frame(frame) {
                 Ok(_) => {
-                    println!("It works! {} images done!", self.data_encoded_numb);
+                    print!(
+                        "\r{}/{}  images done! [{}%]",
+                        self.data_encoded_numb,
+                        self.nb_of_images,
+                        (self.data_encoded_numb as f32 / self.nb_of_images as f32 * 100f32).floor()
+                    );
                     self.data_encoded_numb += 1;
                     break;
                 }
-                Err(err) => {
-                    println!("Gosh dang it!, {}", err);
+                Err(_) => {
+                    // println!("Gosh dang it!, {}", err);
                     self.recieve_packets_and_flush();
                 }
             }
@@ -218,7 +224,10 @@ impl Transcoder {
     fn send_eof_to_encoder(&mut self) {
         loop {
             match self.encoder.send_eof() {
-                Ok(()) => break,
+                Ok(()) => {
+                    println!("");
+                    break;
+                }
                 Err(_) => self.recieve_packets_and_flush(),
             }
         }
@@ -233,7 +242,7 @@ impl Transcoder {
                     packet.set_stream(0);
 
                     match packet.write_interleaved(&mut self.octx) {
-                        Ok(_) => println!("Packet written successfully."),
+                        Ok(_) => (),
                         Err(e) => eprintln!("Error writing packet: {}", e),
                     }
 
@@ -242,7 +251,6 @@ impl Transcoder {
                 Err(ffmpeg::Error::Other {
                     errno: ffmpeg::util::error::EAGAIN,
                 }) => {
-                    println!("encoding is done");
                     break;
                 }
                 Err(ffmpeg::Error::Eof) => {
@@ -258,7 +266,7 @@ impl Transcoder {
     }
 }
 
-pub fn convert_func(output_file: &String, framerate: &String) {
+pub fn convert_func(output_file: &String, framerate: &String, nb_of_images: u32) {
     let image_dir = get_tmp_folder();
     let framerate_int: u8 = framerate.parse::<u8>().unwrap();
     let pattern = format!("{}/*.png", image_dir.display()); // Change to your image extension
@@ -268,7 +276,7 @@ pub fn convert_func(output_file: &String, framerate: &String) {
     eprintln!("x264 options: {:?}", x264_opts);
 
     ffmpeg::init().unwrap();
-    log::set_level(log::Level::Debug);
+    log::set_level(log::Level::Fatal);
 
     let octx = format::output(output_file).unwrap();
 
@@ -292,6 +300,7 @@ pub fn convert_func(output_file: &String, framerate: &String) {
         framerate_int,
         octx,
         x264_opts,
+        nb_of_images,
     )
     .unwrap();
     // println!(
@@ -304,7 +313,7 @@ pub fn convert_func(output_file: &String, framerate: &String) {
     //     octx.stream(0).unwrap().avg_frame_rate(),
     //     transcoder.encoder.frame_rate()
     // );
-    println!("Encoder frame rate: {:?}", transcoder.encoder.frame_rate());
+    // println!("Encoder frame rate: {:?}", transcoder.encoder.frame_rate());
     // Process frames
     // transcoder.receive_and_process_decoded_frames();
     transcoder.send_eof_to_encoder();
@@ -316,7 +325,7 @@ pub fn convert_func(output_file: &String, framerate: &String) {
                 packet.set_stream(0);
 
                 match packet.write_interleaved(&mut transcoder.octx) {
-                    Ok(_) => println!("Packet written successfully."),
+                    Ok(_) => (),
                     Err(e) => eprintln!("Error writing packet: {}", e),
                 }
 
@@ -347,8 +356,8 @@ pub fn convert_func(output_file: &String, framerate: &String) {
     if let Err(e) = transcoder.octx.write_trailer() {
         eprintln!("Failed to write trailer: {}", e);
     }
-    println!(
-        "stuff: {:?}",
-        transcoder.octx.stream(0).unwrap().avg_frame_rate()
-    );
+    // println!(
+    //     "stuff: {:?}",
+    //     transcoder.octx.stream(0).unwrap().avg_frame_rate()
+    // );
 }

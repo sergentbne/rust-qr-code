@@ -37,10 +37,10 @@ fn compress_file<'a>(
         let binding = Vec::from(data_clone);
         let data_temp = binding.as_slice();
 
-        let mut shithead: Vec<u8> = Vec::new();
+        let mut final_data: Vec<u8> = Vec::new();
         let mut decoder_test: XzDecoder<&[u8]> = XzDecoder::new(data_temp);
-        let stuff = decoder_test.read_to_end(&mut shithead).unwrap();
-        assert!(stuff != 0);
+        let qty_of_bytes_in_data = decoder_test.read_to_end(&mut final_data).unwrap();
+        assert!(qty_of_bytes_in_data != 0);
 
         // println!("{:?}", shithead);
     }
@@ -93,7 +93,7 @@ fn create_qr_code_from_data(data: &[u8], qr_number: &u32) {
     return;
 }
 
-fn get_data_from_file(data: &mut VecDeque<u8>) {
+fn get_data_from_file(data: &mut VecDeque<u8>) -> u32 {
     let mut buffer: [u8; 2048] = [0; 2048];
 
     let mut qrcode_counter: u32 = 0;
@@ -141,19 +141,25 @@ fn get_data_from_file(data: &mut VecDeque<u8>) {
 
     println!("\nfinished reading the file                                      ");
     println!("created {} image(s)", qrcode_counter);
+    qrcode_counter
 }
 
 pub fn create_qrcode_file(&parsed_arguments: &[Option<&String>; 4]) {
     create_environement();
     let mut compressions_deque = VecDeque::new();
+    let nb_of_images: u32;
 
     match compress_file(parsed_arguments[0].unwrap(), &mut compressions_deque) {
         Ok(n) => {
             println!("size after compression: {:}", &n.len());
-            get_data_from_file(n);
+            nb_of_images = get_data_from_file(n);
         }
         Err(err) => panic!("compression error!, {}", err),
     };
-    convert_func(parsed_arguments[1].unwrap(), parsed_arguments[2].unwrap());
+    convert_func(
+        parsed_arguments[1].unwrap(),
+        parsed_arguments[2].unwrap(),
+        nb_of_images,
+    );
     clean_environnement();
 }
