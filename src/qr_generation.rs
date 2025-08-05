@@ -7,7 +7,9 @@ use qrcode::QrCode;
 use std::collections::VecDeque;
 use std::fs::{File, create_dir, remove_dir_all};
 use std::io::{Read, Write};
+use std::sync::mpsc::{self, Sender};
 use std::thread;
+use std::time::Duration;
 use xz::read::XzDecoder;
 use xz::write::XzEncoder;
 
@@ -22,15 +24,15 @@ fn compress_file<'a>(
         Err(err) => return Err(format!("Error reading file: {}", err)),
     };
 
-    let total = stuff.read_to_end(&mut data_from_file).unwrap();
-    let mut encoder = XzEncoder::new(compressed, 6);
+    let file_size_before_compression = stuff.read_to_end(&mut data_from_file).unwrap();
+    let mut encoder = XzEncoder::new(compressed, 9);
     match encoder.write_all(&data_from_file) {
         Ok(_) => (),
         Err(err) => return Err(format!("Error compressing file: {}", err)),
     }
     let compressed_final = encoder.finish().unwrap();
 
-    println!("size before compression: {:}", total);
+    println!("size before compression: {:}", file_size_before_compression);
     #[cfg(debug_assertions)]
     {
         let data_clone = compressed_final.clone();
@@ -100,7 +102,7 @@ fn get_data_from_file(data: &mut VecDeque<u8>) -> u32 {
     let mut interrupt = buffer.len();
     let mut total_size = 0;
     let mut threads = Vec::new();
-    let total_data_of_file = data.len().clone() as f32;
+    let total_data_of_file = data.len() as f32;
     let max_threads: u8 = 10;
     while data.len() != 0 {
         let mut tmp: Vec<u8>;
@@ -148,10 +150,34 @@ pub fn create_qrcode_file(&parsed_arguments: &[Option<&String>; 4]) {
     create_environement();
     let mut compressions_deque = VecDeque::new();
     let nb_of_images: u32;
+    let (sync_device, reciever) = mpsc::channel();
+    let spinner = thread::spawn(move || {
+        let values: [&'static str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let mut index_of_spin: usize = 0;
+        let mut is_running = true;
 
+        while is_running {
+            match reciever.try_recv() {
+                Ok(_) => (),
+                Err(mpsc::TryRecvError::Disconnected) => is_running = false,
+                Err(mpsc::TryRecvError::Empty) => (),
+            }
+            thread::sleep(Duration::from_millis(100));
+            print!("\r[{}] Compressing ...", values.get(index_of_spin).unwrap());
+            std::io::stdout().flush().unwrap();
+            index_of_spin = (index_of_spin + 1) % values.len();
+        }
+        println!("                                    ");
+        return;
+    });
+    let _ = sync_device.send(());
     match compress_file(parsed_arguments[0].unwrap(), &mut compressions_deque) {
         Ok(n) => {
+            drop(sync_device);
+            spinner.join().unwrap();
+
             println!("size after compression: {:}", &n.len());
+
             nb_of_images = get_data_from_file(n);
         }
         Err(err) => panic!("compression error!, {}", err),

@@ -1,6 +1,6 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use std::path::PathBuf;
+use std::{io::Write, path::PathBuf};
 
 use ffmpeg::{Dictionary, Packet, Rational, codec, encoder, format, frame, log};
 use glob::glob;
@@ -210,6 +210,8 @@ impl Transcoder {
                         self.nb_of_images,
                         (self.data_encoded_numb as f32 / self.nb_of_images as f32 * 100f32).floor()
                     );
+                    std::io::stdout().flush().unwrap();
+
                     self.data_encoded_numb += 1;
                     break;
                 }
