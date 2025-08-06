@@ -16,6 +16,7 @@ use xz::write::XzEncoder;
 fn compress_file<'a>(
     path_to_file: &'a str,
     compressed: &'a mut VecDeque<u8>,
+    original_file_size: &mut u32,
 ) -> Result<&'a mut VecDeque<u8>, String> {
     let mut data_from_file: Vec<u8> = vec![];
 
@@ -31,8 +32,8 @@ fn compress_file<'a>(
         Err(err) => return Err(format!("Error compressing file: {}", err)),
     }
     let compressed_final = encoder.finish().unwrap();
+    *original_file_size = file_size_before_compression as u32;
 
-    println!("size before compression: {:}", file_size_before_compression);
     #[cfg(debug_assertions)]
     {
         let data_clone = compressed_final.clone();
@@ -167,14 +168,22 @@ pub fn create_qrcode_file(&parsed_arguments: &[Option<&String>; 4]) {
             std::io::stdout().flush().unwrap();
             index_of_spin = (index_of_spin + 1) % values.len();
         }
-        println!("                                    ");
+        print!(" finished!");
+        println!("");
         return;
     });
+    let mut original_file_size: u32 = 0;
+
     let _ = sync_device.send(());
-    match compress_file(parsed_arguments[0].unwrap(), &mut compressions_deque) {
+    match compress_file(
+        parsed_arguments[0].unwrap(),
+        &mut compressions_deque,
+        &mut original_file_size,
+    ) {
         Ok(n) => {
             drop(sync_device);
             spinner.join().unwrap();
+            println!("size before compression: {:}", original_file_size);
 
             println!("size after compression: {:}", &n.len());
 
